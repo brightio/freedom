@@ -1,0 +1,95 @@
+#!/usr/bin/python3
+
+import os
+import sys
+import tty
+import pty
+
+from re import compile
+from fcntl import ioctl
+from struct import pack
+from select import select
+from termios import TIOCSWINSZ
+from signal import signal, SIGWINCH
+from shutil import which, get_terminal_size
+
+input_indicator = compile(rb"([Pp]assword(?: for .*)?|[Vv]erification code):")
+
+try:
+	with open(os.path.expanduser("~/.freedom_regex"), "rb") as regex_file:
+		input_indicator = compile(regex_file.read().strip())
+except FileNotFoundError:
+	pass
+except Exception as e:
+	print(e)
+	exit()
+
+resize_r, resize_w = os.pipe()
+def WinResize(num, stack):
+	os.write(resize_w, b"\x00")
+signal(SIGWINCH, WinResize)
+
+def spawn(arguments, _input):
+	_input = [line.encode() for line in _input.splitlines()]
+
+	pid, master_fd = pty.fork()
+	if pid == pty.CHILD:
+		os.execlp(arguments[0], *arguments)
+	try:
+		mode = tty.tcgetattr(pty.STDIN_FILENO)
+		tty.setraw(pty.STDIN_FILENO)
+		restore = True
+	except tty.error:
+		restore = False
+	try:
+		os.kill(os.getpid(), SIGWINCH)
+		fds = [master_fd, pty.STDIN_FILENO, resize_r]
+		while fds:
+			rfds, _, _ = select(fds, [], [])
+
+			if resize_r in rfds:
+				os.read(resize_r, 1)
+				columns, lines = get_terminal_size()
+				ioctl(master_fd, TIOCSWINSZ, pack("HH", lines, columns))
+
+			if master_fd in rfds:
+				try:
+					data = pty._read(master_fd)
+					if _input and input_indicator.search(data):
+						entry = _input.pop(0)
+						pty._writen(master_fd, entry + b"\n")
+				except OSError:
+	 				data = b""
+				if not data:
+					return
+				else:
+					os.write(pty.STDOUT_FILENO, data)
+
+			if pty.STDIN_FILENO in rfds:
+				data = pty._read(pty.STDIN_FILENO)
+				if not data:
+					fds.remove(pty.STDIN_FILENO)
+				else:
+					pty._writen(master_fd, data)
+	finally:
+		if restore:
+			tty.tcsetattr(pty.STDIN_FILENO, tty.TCSAFLUSH, mode)
+
+	close(master_fd)
+	return waitpid(pid, 0)[1]
+
+if __name__ == '__main__':
+	if os.isatty(sys.stdin.fileno()):
+		print("No stdin input")
+	elif len(sys.argv) < 2:
+		print("No command line to execute")
+	elif not which(sys.argv[1]):
+		print("Executable does not exist")
+	else:
+		_input = sys.stdin.read()
+		_tty = os.open('/dev/tty', os.O_RDWR)
+		os.dup2(_tty, 0)
+		os.dup2(_tty, 1)
+		os.dup2(_tty, 2)
+		os.close(_tty)
+		spawn(sys.argv[1:], _input)

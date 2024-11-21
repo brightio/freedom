@@ -14,6 +14,7 @@ from signal import signal, SIGWINCH
 from shutil import which, get_terminal_size
 
 input_indicator = compile(rb"([Pp]assword(?: for .*)?|[Vv]erification code):")
+BUFFER = 10240
 
 try:
 	with open(os.path.expanduser("~/.freedom_regex"), "rb") as regex_file:
@@ -54,10 +55,12 @@ def spawn(arguments, _input):
 
 			if master_fd in rfds:
 				try:
-					data = pty._read(master_fd)
+					data = os.read(master_fd, BUFFER)
 					if _input and input_indicator.search(data):
-						entry = _input.pop(0)
-						pty._writen(master_fd, entry + b"\n")
+						entry = _input.pop(0) + b"\n"
+						while entry:
+							n = os.write(master_fd, entry)
+							entry = entry[n:]
 				except OSError:
 	 				data = b""
 				if not data:
@@ -66,11 +69,13 @@ def spawn(arguments, _input):
 					os.write(pty.STDOUT_FILENO, data)
 
 			if pty.STDIN_FILENO in rfds:
-				data = pty._read(pty.STDIN_FILENO)
+				data = os.read(pty.STDIN_FILENO, BUFFER)
 				if not data:
 					fds.remove(pty.STDIN_FILENO)
 				else:
-					pty._writen(master_fd, data)
+					while data:
+						n = os.write(master_fd, data)
+						data = data[n:]
 	finally:
 		if restore:
 			tty.tcsetattr(pty.STDIN_FILENO, tty.TCSAFLUSH, mode)

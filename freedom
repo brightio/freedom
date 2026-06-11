@@ -62,9 +62,9 @@ def spawn(arguments, _input):
 							n = os.write(master_fd, entry)
 							entry = entry[n:]
 				except OSError:
-	 				data = b""
+					data = b""
 				if not data:
-					return
+					break
 				else:
 					os.write(pty.STDOUT_FILENO, data)
 
@@ -80,8 +80,8 @@ def spawn(arguments, _input):
 		if restore:
 			tty.tcsetattr(pty.STDIN_FILENO, tty.TCSAFLUSH, mode)
 
-	close(master_fd)
-	return waitpid(pid, 0)[1]
+	os.close(master_fd)
+	return os.waitpid(pid, 0)[1]
 
 if __name__ == '__main__':
 	if os.isatty(sys.stdin.fileno()):
@@ -97,4 +97,6 @@ if __name__ == '__main__':
 		os.dup2(_tty, 1)
 		os.dup2(_tty, 2)
 		os.close(_tty)
-		spawn(sys.argv[1:], _input)
+		status = spawn(sys.argv[1:], _input)
+		if status is not None:
+			sys.exit(os.waitstatus_to_exitcode(status))

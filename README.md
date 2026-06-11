@@ -2,7 +2,7 @@
 
 Freedom is a terminal input autofiller written in Python 3. Ever wished you could do this?
 
-```
+```bash
 echo mypassword | ssh myuser@i_need_no_protection_thanks
 ```
 
@@ -19,15 +19,15 @@ It also returns the wrapped command's exit code, so it behaves correctly inside 
 - Linux / macOS / any Unix (uses `pty` and `termios`, **not** Windows)
 - Python 3, no external dependencies, standard library only
 
-```
-git clone <repo-url>
+```bash
+git clone https://github.com/brightio/freedom
 cd freedom
 chmod +x freedom
 ```
 
 ## Basic usage
 
-```
+```bash
 echo P@55w0rd | ./freedom ssh user@host
 echo P@55w0rd | ./freedom scp host:file /tmp
 echo P@55w0rd | ./freedom sudo -i
@@ -38,7 +38,7 @@ echo P@55w0rd | ./freedom su -
 
 Got more than one prompt? Give one line of input per prompt. Each line answers the next matching prompt in order:
 
-```
+```bash
 echo -e "P@55w0rd\nR00tP@ss" | ./freedom ssh -t user@host "su -"
 ```
 
@@ -48,13 +48,13 @@ Here `P@55w0rd` answers the SSH login prompt and `R00tP@ss` answers the `su` pro
 
 By default `freedom` looks for prompts matching:
 
-```
+```regex
 ([Pp]assword(?: for .*)?|[Vv]erification code):
 ```
 
 To use your own pattern, put a single regex in `~/.freedom_regex`. For example, to also catch a `Passphrase:` prompt:
 
-```
+```regex
 ([Pp]ass(?:word|phrase)|[Vv]erification code):
 ```
 
